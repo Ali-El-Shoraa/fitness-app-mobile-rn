@@ -41,9 +41,12 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
+      - name: Create .env file
+        run: |
+          echo "EXPO_PUBLIC_BASE_URL=${{ secrets.EXPO_PUBLIC_BASE_URL }}" >> .env
+
       - name: Prebuild Android
         run: npx expo prebuild --platform android
-
       - name: Decode Keystore
         run: |
           mkdir -p android/app
