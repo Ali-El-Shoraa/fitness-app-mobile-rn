@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Fitness",
+    "slug": "fitness-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/favicon.ico",
+    "scheme": "fitnessapp",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "image": "./assets/images/temp.png",
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "icon": "./assets/images/temp.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/temp.png",
+        "backgroundColor": "#000000"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.ali.elshoraa.fitnessapp"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.ico"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-system-ui",
+      "expo-image",
+      "expo-splash-screen",
+      "./plugins/withLottieSplash.js"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
