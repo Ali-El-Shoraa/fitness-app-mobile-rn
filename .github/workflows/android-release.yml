@@ -35,6 +35,12 @@ jobs:
       - name: Prebuild Android
         run: npx expo prebuild --platform android --clean
 
+        # أضف هذه الخطوة في yml بعد Prebuild مباشرة
+      - name: Debug build.gradle
+        run: |
+          echo "=== Full build.gradle ==="
+          cat android/app/build.gradle
+
       # ✅ تحقق أن الإعدادات طُبقت فعلاً
       - name: Verify Optimizations Applied
         run: |
