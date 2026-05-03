@@ -2,7 +2,7 @@
   "expo": {
     "name": "Fitness",
     "slug": "fitness-app",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/favicon.ico",
     "scheme": "fitnessapp",
@@ -34,7 +34,8 @@
       "expo-system-ui",
       "expo-image",
       "expo-splash-screen",
-      "./plugins/withLottieSplash.js"
+      "./plugins/withLottieSplash.js",
+      "./plugins/withAndroidOptimization.js"
     ],
     "experiments": {
       "typedRoutes": true

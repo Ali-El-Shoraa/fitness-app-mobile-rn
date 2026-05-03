@@ -83,5 +83,10 @@ jobs:
         with:
           files: android/app/build/outputs/apk/release/*.apk
           generate_release_notes: true
+          body: |
+            ### Which file should I choose?
+            * **app-universal-release.apk**: Works on all phones (the safest option).
+            * **app-arm64-v8a-release.apk**: For modern phones (smaller size and faster performance).
+            * **app-armeabi-v7a-release.apk**: For older phones.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
