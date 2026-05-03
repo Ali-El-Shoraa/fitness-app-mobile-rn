@@ -34,8 +34,8 @@
       "expo-system-ui",
       "expo-image",
       "expo-splash-screen",
-      "./plugins/withLottieSplash.js",
-      "./plugins/withAndroidOptimization.js"
+      "./plugins/withLottieSplash.js"
+      // "./plugins/withAndroidOptimization.js"
     ],
     "experiments": {
       "typedRoutes": true
