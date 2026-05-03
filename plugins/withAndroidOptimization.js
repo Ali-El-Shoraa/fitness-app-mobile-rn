@@ -1,40 +1,28 @@
 const { withAppBuildGradle } = require("@expo/config-plugins");
 
-/**
- * Expo Config Plugin لتحسين حجم تطبيق أندرويد
- * 1. تفعيل تقسيم الـ APK حسب المعالج (Architectures)
- * 2. إنتاج نسخة Universal APK تعمل على جميع الأجهزة
- * 3. تفعيل Proguard/R8 لحذف الكود غير المستخدم وتصغير الحجم
- */
 const withAndroidOptimization = (config) => {
   return withAppBuildGradle(config, (mod) => {
     let contents = mod.modResults.contents;
 
-    // 1. تفعيل تقسيم الـ APK (سيعطينا ملفات صغيرة لكل معالج)
-    if (contents.includes("enableSeparateBuildPerCPUArchitecture = false")) {
-      contents = contents.replace(
-        "enableSeparateBuildPerCPUArchitecture = false",
+    // ✅ Separate APKs - أحدث صيغة
+    contents = contents
+      .replace(
+        /enableSeparateBuildPerCPUArchitecture\s*=\s*false/g,
         "enableSeparateBuildPerCPUArchitecture = true",
-      );
-    }
-
-    // 2. تفعيل إنتاج النسخة الشاملة (Universal APK) لضمان عمل التطبيق عند الجميع
-    // نبحث عن مكان إضافة الإعداد داخل بلوك الـ splits
-    if (contents.includes("universalApk false")) {
-      contents = contents.replace("universalApk false", "universalApk true");
-    } else if (contents.includes("reset()")) {
-      // في بعض نسخ Expo، قد نحتاج لإضافتها يدوياً داخل بلوك الـ splits
-      contents = contents.replace(
-        "reset()",
-        "reset()\n            universalApk true",
-      );
-    }
-
-    // 3. تفعيل Proguard/R8 (لتنظيف وتصغير حجم الكود البرمجي)
-    if (contents.includes("enableProguardInReleaseBuilds = false")) {
-      contents = contents.replace(
-        "enableProguardInReleaseBuilds = false",
+      )
+      // ✅ Proguard
+      .replace(
+        /enableProguardInReleaseBuilds\s*=\s*false/g,
         "enableProguardInReleaseBuilds = true",
+      )
+      // ✅ Universal APK
+      .replace(/universalApk\s+false/g, "universalApk true");
+
+    // ✅ لو universalApk غير موجودة أصلاً — أضفها
+    if (!contents.includes("universalApk")) {
+      contents = contents.replace(
+        /abi\s*\{/,
+        `abi {\n            universalApk true`,
       );
     }
 

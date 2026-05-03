@@ -16,13 +16,13 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.ali.elshoraa.fitnessapp",
       "icon": "./assets/images/temp.png",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/temp.png",
         "backgroundColor": "#000000"
       },
-      "predictiveBackGestureEnabled": false,
-      "package": "com.ali.elshoraa.fitnessapp"
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "bundler": "metro",

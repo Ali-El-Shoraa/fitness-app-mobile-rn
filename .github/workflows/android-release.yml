@@ -1,105 +1,9 @@
-# name: Build & Release Android APK
-
-# on:
-#   push:
-#     tags:
-#       - "v*" # لن يعمل إلا عند رفع Tag جديد
-
-# permissions:
-#   contents: write
-
-# jobs:
-#   build:
-#     runs-on: ubuntu-latest
-
-#     steps:
-#       - name: Checkout repo
-#         uses: actions/checkout@v4
-
-#       - name: Setup Node
-#         uses: actions/setup-node@v4
-#         with:
-#           node-version: 20
-#           cache: npm
-
-#       - name: Setup Java
-#         uses: actions/setup-java@v4
-#         with:
-#           distribution: temurin
-#           java-version: 17
-
-#       - name: Install dependencies
-#         run: npm ci
-
-#       - name: Prebuild Android
-#         run: npx expo prebuild --platform android
-
-#       # 🔥 الخطوة الحاسمة: تعديل الإعدادات بالقوة والتحقق منها
-#       - name: Force Android Optimizations & Verify
-#         run: |
-#           # تحديد المسار الصحيح للملف الذي يحتوي على الإعدادات
-#           APP_GRADLE="android/app/build.gradle"
-
-#           echo "--- Searching in $APP_GRADLE ---"
-
-#           # 1. تفعيل تقسيم الـ APK (استخدام regex مرن جداً)
-#           sed -i 's/enableSeparateBuildPerCPUArchitecture\s*=\s*false/enableSeparateBuildPerCPUArchitecture = true/g' $APP_GRADLE || echo "Setting 1 not found"
-
-#           # 2. تفعيل Proguard
-#           sed -i 's/enableProguardInReleaseBuilds\s*=\s*false/enableProguardInReleaseBuilds = true/g' $APP_GRADLE || echo "Setting 2 not found"
-
-#           # 3. تفعيل Universal APK (إضافتها في مكانها الصحيح داخل بلوك الـ splits)
-#           if grep -q "universalApk false" "$APP_GRADLE"; then
-#             sed -i 's/universalApk false/universalApk true/g' $APP_GRADLE
-#           else
-#             # إذا لم تكن موجودة، سنحقنها بعد كلمة reset() الشهيرة في ملفات Gradle
-#             sed -i '/reset()/a \            universalApk true' $APP_GRADLE || echo "Setting 3 injection failed"
-#           fi
-
-#           echo "--- Verification (Final Results) ---"
-#           grep -E "enableSeparateBuildPerCPUArchitecture|enableProguardInReleaseBuilds|universalApk" $APP_GRADLE || echo "No settings found in file!"
-#       - name: Decode Keystore
-#         run: |
-#           mkdir -p android/app
-#           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
-
-#       - name: Create gradle.properties
-#         run: |
-#           cat >> android/gradle.properties << 'EOF'
-#           MYAPP_UPLOAD_STORE_FILE=release.keystore
-#           MYAPP_UPLOAD_KEY_ALIAS=${{ secrets.KEY_ALIAS }}
-#           MYAPP_UPLOAD_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}
-#           MYAPP_UPLOAD_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
-#           hermesEnabled=true
-#           EOF
-
-#       - name: Make Gradle executable
-#         run: chmod +x android/gradlew
-
-#       - name: Build Release APK
-#         run: |
-#           cd android
-#           ./gradlew clean
-#           ./gradlew assembleRelease --build-cache --parallel --no-daemon
-
-#       - name: Create GitHub Release
-#         uses: softprops/action-gh-release@v2
-#         with:
-#           files: android/app/build/outputs/apk/release/*.apk
-#           generate_release_notes: true
-#           body: |
-#             ### Which file should I choose? 📂
-#             * 🛡️ **app-universal-release.apk**: Works on all phones (Safest option, larger size).
-#             * ⚡ **app-arm64-v8a-release.apk**: For modern phones (Small size, better performance).
-#             * 📱 **app-armeabi-v7a-release.apk**: For older Android devices.
-#         env:
-#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 name: Build & Release Android APK
 
 on:
   push:
     tags:
-      - "v*" # سيعمل فقط عند رفع Tag جديد
+      - "v*"
 
 permissions:
   contents: write
@@ -127,8 +31,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # ✅ prebuild يطبق withAndroidOptimization تلقائياً
       - name: Prebuild Android
         run: npx expo prebuild --platform android --clean
+
+      # ✅ تحقق أن الإعدادات طُبقت فعلاً
+      - name: Verify Optimizations Applied
+        run: |
+          echo "=== Checking build.gradle ==="
+          grep -E "enableSeparateBuildPerCPUArchitecture|enableProguardInReleaseBuilds|universalApk" android/app/build.gradle || echo "❌ NOT FOUND"
 
       - name: Decode Keystore
         run: |
@@ -145,15 +56,16 @@ jobs:
           hermesEnabled=true
           EOF
 
-      - name: Build Android Release (Forced Optimizations)
+      - name: Build Release APK
         run: |
           cd android
-          ./gradlew clean
-          ./gradlew assembleRelease \
-            -PenableSeparateBuildPerCPUArchitecture=true \
-            -PenableProguardInReleaseBuilds=true \
-            -PuniversalApk=true \
-            --no-daemon
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: List APK outputs
+        run: |
+          echo "=== APK Files ==="
+          find android/app/build/outputs/apk -name "*.apk" -exec ls -lh {} \;
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -162,9 +74,9 @@ jobs:
           generate_release_notes: true
           body: |
             ### تم البناء بنجاح! 🚀
-            تجد أدناه النسخ المقسمة لتقليل الحجم:
-            * **app-arm64-v8a-release.apk**: للهواتف الحديثة (حجم صغير).
-            * **app-universal-release.apk**: لجميع الهواتف (حجم أكبر).
+            * **app-arm64-v8a-release.apk** — للهواتف الحديثة (أصغر حجماً).
+            * **app-armeabi-v7a-release.apk** — للهواتف القديمة.
+            * **app-universal-release.apk** — لجميع الهواتف.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
