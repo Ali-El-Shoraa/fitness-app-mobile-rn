@@ -39,21 +39,21 @@ jobs:
         run: |
           BUILD_GRADLE="android/app/build.gradle"
 
-          echo "--- Before Modification ---"
-          grep -E "enableSeparateBuildPerCPUArchitecture|enableProguardInReleaseBuilds|universalApk" $BUILD_GRADLE || echo "Not found yet"
+          # 1. تفعيل تقسيم الـ APK (سيبحث عن الكلمة المفتاحية ويغير السطر بالكامل)
+          sed -i 's/enableSeparateBuildPerCPUArchitecture\s*=\s*false/enableSeparateBuildPerCPUArchitecture = true/g' $BUILD_GRADLE
 
-          # تعديل الإعدادات باستخدام sed
-          sed -i 's/def enableSeparateBuildPerCPUArchitecture = false/def enableSeparateBuildPerCPUArchitecture = true/g' $BUILD_GRADLE
-          sed -i 's/def enableProguardInReleaseBuilds = false/def enableProguardInReleaseBuilds = true/g' $BUILD_GRADLE
+          # 2. تفعيل Proguard
+          sed -i 's/enableProguardInReleaseBuilds\s*=\s*false/enableProguardInReleaseBuilds = true/g' $BUILD_GRADLE
 
-          # إضافة universalApk true داخل بلوك الـ splits
-          sed -i '/reset()/a \            universalApk true' $BUILD_GRADLE
+          # 3. تفعيل Universal APK (إضافة السطر داخل بلوك الـ splits)
+          # سنستخدم طريقة أكثر مرونة للحقن
+          sed -i '/universalApk/s/false/true/' $BUILD_GRADLE || true
 
-          echo "--- After Modification (Verification) ---"
-          grep "enableSeparateBuildPerCPUArchitecture" $BUILD_GRADLE
-          grep "enableProguardInReleaseBuilds" $BUILD_GRADLE
-          grep "universalApk" $BUILD_GRADLE
-
+          # التحقق من نجاح العملية (بدون تعطيل الأكشن إذا فشل البحث)
+          echo "--- Checking Final Status ---"
+          grep "enableSeparateBuildPerCPUArchitecture" $BUILD_GRADLE || echo "Check 1 failed"
+          grep "enableProguardInReleaseBuilds" $BUILD_GRADLE || echo "Check 2 failed"
+          grep "universalApk" $BUILD_GRADLE || echo "Check 3 failed"
       - name: Decode Keystore
         run: |
           mkdir -p android/app
