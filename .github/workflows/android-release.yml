@@ -60,13 +60,21 @@ jobs:
           MYAPP_UPLOAD_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}
           MYAPP_UPLOAD_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
           hermesEnabled=true
+          # ✅ تقليل الحجم
+          android.enableMinifyInReleaseBuilds=true
+          android.enableShrinkResourcesInReleaseBuilds=true
+          # ✅ تقسيم APK حسب المعالج
+          reactNativeArchitectures=arm64-v8a,armeabi-v7a
           EOF
 
       - name: Build Release APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          # ✅ arm64 فقط (أصغر حجم، يعمل على 99% من الهواتف الحديثة)
+          ./gradlew assembleRelease \
+            -PreactNativeArchitectures=arm64-v8a \
+            --no-daemon
 
       - name: List APK outputs
         run: |
