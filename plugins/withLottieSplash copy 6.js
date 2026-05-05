@@ -8,7 +8,6 @@ const {
 const fs = require("fs");
 const path = require("path");
 
-// ✅ أضف في أعلى الملف
 const withSplashDrawable = (config) => {
   return withDangerousMod(config, [
     "android",
@@ -17,26 +16,20 @@ const withSplashDrawable = (config) => {
         mod.modRequest.platformProjectRoot,
         "app/src/main/res/drawable",
       );
-
       fs.mkdirSync(drawableDir, { recursive: true });
-
-      // ✅ صورة شفافة 1x1 كـ placeholder لـ expo-splash-screen
       const transparentPng = Buffer.from(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
         "base64",
       );
-
       fs.writeFileSync(
         path.join(drawableDir, "splashscreen_logo.png"),
         transparentPng,
       );
-
       return mod;
     },
   ]);
 };
 
-// ✅ 1. أضف Lottie dependency في build.gradle
 const withLottieGradle = (config) => {
   return withAppBuildGradle(config, (mod) => {
     if (!mod.modResults.contents.includes("com.airbnb.android:lottie")) {
@@ -49,66 +42,108 @@ const withLottieGradle = (config) => {
   });
 };
 
-// ✅ 2. أنشئ SplashActivity.kt تلقائياً
 const withSplashActivity = (config) => {
   return withDangerousMod(config, [
     "android",
     async (mod) => {
-      const packageName = mod.android?.package || "com.ali.elshoraa.fitnessapp";
+      const packageName =
+        mod.android?.package ||
+        config.android?.package ||
+        "com.ali.elshoraa.fitnessapp";
       const packagePath = packageName.replace(/\./g, "/");
       const activityDir = path.join(
         mod.modRequest.platformProjectRoot,
         "app/src/main/java",
         packagePath,
       );
-
       fs.mkdirSync(activityDir, { recursive: true });
 
       const activityContent = `package ${packageName}
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.appcompat.app.AppCompatActivity
 import com.airbnb.lottie.LottieAnimationView
-import kotlin.concurrent.thread
+import com.airbnb.lottie.LottieDrawable
 
 class SplashActivity : AppCompatActivity() {
+    private var isAppReady = false
+    private var isAnimationCycleComplete = false
+    private var hasNavigated = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_splash)
 
         val lottieView = findViewById<LottieAnimationView>(R.id.lottieView)
-        
-        // الرسم المتحرك يعمل في حلقة مستمرة
-        // عملية التحميل تعمل في thread منفصلة
-        thread {
-            try {
-                // حاكِ عملية التحميل الفعلية للتطبيق
-                // يمكنك استبدال هذا بعملية حقيقية مثل تحميل البيانات
-                Thread.sleep(17000) // وقت التحميل الفعلي
-            } catch (e: InterruptedException) {
-                e.printStackTrace()
+        lottieView.repeatCount = LottieDrawable.INFINITE
+        lottieView.playAnimation()
+
+        // ✅ راقب نهاية كل دورة
+        lottieView.addAnimatorUpdateListener { animation ->
+            val progress = animation.animatedFraction
+            if (progress > 0.95f && !isAnimationCycleComplete) {
+                isAnimationCycleComplete = true
+                checkAndNavigate(lottieView)
+            } else if (progress < 0.05f) {
+                isAnimationCycleComplete = false
             }
-            
-            // عند انتهاء التحميل، انتقل فوراً دون انتظار انتهاء الرسم
-            runOnUiThread {
-                startActivity(Intent(this@SplashActivity, MainActivity::class.java))
-                finish()
+        }
+
+        // ✅ ابدأ MainActivity في الخلفية مباشرة
+        val intent = Intent(this, MainActivity::class.java)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
+        startActivity(intent)
+
+        // ✅ استمع لإشارة الجهوزية
+        AppState.onReady = {
+            mainHandler.post {
+                isAppReady = true
+                checkAndNavigate(lottieView)
             }
         }
     }
+
+    private fun checkAndNavigate(lottieView: LottieAnimationView) {
+        if (isAppReady && isAnimationCycleComplete && !hasNavigated) {
+            hasNavigated = true
+            lottieView.cancelAnimation()
+            // ✅ أحضر MainActivity للمقدمة بدلاً من فتحها من جديد
+            val intent = Intent(this, MainActivity::class.java)
+            intent.addFlags(
+                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                Intent.FLAG_ACTIVITY_NO_ANIMATION
+            )
+            startActivity(intent)
+            finish()
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        AppState.onReady = null
+    }
+}`;
+
+      const appStateContent = `package ${packageName}
+
+object AppState {
+    var onReady: (() -> Unit)? = null
 }`;
 
       fs.writeFileSync(
         path.join(activityDir, "SplashActivity.kt"),
         activityContent,
       );
+      fs.writeFileSync(path.join(activityDir, "AppState.kt"), appStateContent);
       return mod;
     },
   ]);
 };
 
-// ✅ 3. أنشئ Layout XML تلقائياً
 const withSplashLayout = (config) => {
   return withDangerousMod(config, [
     "android",
@@ -117,7 +152,6 @@ const withSplashLayout = (config) => {
         mod.modRequest.platformProjectRoot,
         "app/src/main/res/layout",
       );
-
       fs.mkdirSync(layoutDir, { recursive: true });
 
       const layoutContent = `<?xml version="1.0" encoding="utf-8"?>
@@ -149,7 +183,6 @@ const withSplashLayout = (config) => {
   ]);
 };
 
-// ✅ 4. أنشئ assets وانسخ splash.json تلقائياً
 const withSplashAsset = (config) => {
   return withDangerousMod(config, [
     "android",
@@ -158,15 +191,13 @@ const withSplashAsset = (config) => {
         mod.modRequest.platformProjectRoot,
         "app/src/main/assets",
       );
-
       fs.mkdirSync(assetsDir, { recursive: true });
 
       const source = path.join(
         mod.modRequest.projectRoot,
-        "assets/animation/splash.json", // ✅ مسار ملفك
+        "assets/animation/splash.json",
       );
       const dest = path.join(assetsDir, "splash.json");
-
       if (fs.existsSync(source)) {
         fs.copyFileSync(source, dest);
       }
@@ -175,15 +206,15 @@ const withSplashAsset = (config) => {
   ]);
 };
 
-// ✅ 5. عدّل AndroidManifest
 const withSplashManifest = (config) => {
   return withAndroidManifest(config, (mod) => {
     const manifest = mod.modResults.manifest;
     const application = manifest.application[0];
 
-    // أزل LAUNCHER من MainActivity
+    // ✅ أزل LAUNCHER من MainActivity وأضف launchMode
     application.activity = application.activity.map((activity) => {
       if (activity.$["android:name"] === ".MainActivity") {
+        activity.$["android:launchMode"] = "singleTask";
         activity["intent-filter"] = activity["intent-filter"]?.filter(
           (filter) =>
             !filter.category?.some(
@@ -195,7 +226,6 @@ const withSplashManifest = (config) => {
       return activity;
     });
 
-    // أضف SplashActivity إذا لم تكن موجودة
     const hasSplash = application.activity.some(
       (a) => a.$["android:name"] === ".SplashActivity",
     );
@@ -206,6 +236,7 @@ const withSplashManifest = (config) => {
           "android:name": ".SplashActivity",
           "android:theme": "@style/Theme.AppCompat.NoActionBar",
           "android:exported": "true",
+          "android:launchMode": "singleTop",
         },
         "intent-filter": [
           {
@@ -226,7 +257,50 @@ const withSplashManifest = (config) => {
   });
 };
 
-// ✅ دمج كل الـ plugins
+const withMainActivity = (config) => {
+  return withDangerousMod(config, [
+    "android",
+    async (mod) => {
+      const packageName =
+        mod.android?.package ||
+        config.android?.package ||
+        "com.ali.elshoraa.fitnessapp";
+      const packagePath = packageName.replace(/\./g, "/");
+      const activityDir = path.join(
+        mod.modRequest.platformProjectRoot,
+        "app/src/main/java",
+        packagePath,
+      );
+      const mainActivityPath = path.join(activityDir, "MainActivity.kt");
+
+      if (fs.existsSync(mainActivityPath)) {
+        let content = fs.readFileSync(mainActivityPath, "utf8");
+
+        if (!content.includes("AppState")) {
+          content = content.replace(
+            /class MainActivity[^{]*\{/,
+            `$&
+  private var hasNotified = false
+
+  override fun onWindowFocusChanged(hasFocus: Boolean) {
+    super.onWindowFocusChanged(hasFocus)
+    if (hasFocus && !hasNotified) {
+      hasNotified = true
+      android.util.Log.d("MainActivity", "=== APP READY ===")
+      AppState.onReady?.invoke()
+    }
+  }
+`,
+          );
+        }
+
+        fs.writeFileSync(mainActivityPath, content);
+      }
+      return mod;
+    },
+  ]);
+};
+
 module.exports = (config) => {
   config = withLottieGradle(config);
   config = withSplashDrawable(config);
@@ -234,5 +308,6 @@ module.exports = (config) => {
   config = withSplashLayout(config);
   config = withSplashAsset(config);
   config = withSplashManifest(config);
+  config = withMainActivity(config);
   return config;
 };

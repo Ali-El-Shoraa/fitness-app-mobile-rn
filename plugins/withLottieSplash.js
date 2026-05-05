@@ -8,7 +8,6 @@ const {
 const fs = require("fs");
 const path = require("path");
 
-// ✅ أضف في أعلى الملف
 const withSplashDrawable = (config) => {
   return withDangerousMod(config, [
     "android",
@@ -17,84 +16,139 @@ const withSplashDrawable = (config) => {
         mod.modRequest.platformProjectRoot,
         "app/src/main/res/drawable",
       );
-
       fs.mkdirSync(drawableDir, { recursive: true });
-
-      // ✅ صورة شفافة 1x1 كـ placeholder لـ expo-splash-screen
       const transparentPng = Buffer.from(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
         "base64",
       );
-
       fs.writeFileSync(
         path.join(drawableDir, "splashscreen_logo.png"),
         transparentPng,
       );
-
       return mod;
     },
   ]);
 };
 
-// ✅ 1. أضف Lottie dependency في build.gradle
-const withLottieGradle = (config) => {
-  return withAppBuildGradle(config, (mod) => {
-    if (!mod.modResults.contents.includes("com.airbnb.android:lottie")) {
-      mod.modResults.contents = mod.modResults.contents.replace(
-        /dependencies\s*\{/,
-        `dependencies {\n    implementation "com.airbnb.android:lottie:6.1.0"`,
-      );
-    }
-    return mod;
-  });
-};
-
-// ✅ 2. أنشئ SplashActivity.kt تلقائياً
 const withSplashActivity = (config) => {
   return withDangerousMod(config, [
     "android",
     async (mod) => {
-      const packageName = mod.android?.package || "com.ali.elshoraa.fitnessapp";
+      const packageName = config.android?.package || "com.yourapp";
       const packagePath = packageName.replace(/\./g, "/");
       const activityDir = path.join(
         mod.modRequest.platformProjectRoot,
         "app/src/main/java",
         packagePath,
       );
-
       fs.mkdirSync(activityDir, { recursive: true });
 
       const activityContent = `package ${packageName}
 
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.content.Intent
+import android.content.res.Configuration
+import android.graphics.Color
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.Gravity
+import android.view.View
+import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import com.airbnb.lottie.LottieAnimationView
-import kotlin.concurrent.thread
 
 class SplashActivity : AppCompatActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_splash)
 
-        val lottieView = findViewById<LottieAnimationView>(R.id.lottieView)
-        
-        // الرسم المتحرك يعمل في حلقة مستمرة
-        // عملية التحميل تعمل في thread منفصلة
-        thread {
-            try {
-                // حاكِ عملية التحميل الفعلية للتطبيق
-                // يمكنك استبدال هذا بعملية حقيقية مثل تحميل البيانات
-                // Thread.sleep(17000) // وقت التحميل الفعلي
-            } catch (e: InterruptedException) {
-                e.printStackTrace()
+        // ✅ اكتشف الوضع الحالي
+        val isDarkMode = (resources.configuration.uiMode and
+            Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+
+        // ✅ ألوان الخلفية
+        val bgColor = if (isDarkMode) Color.parseColor("#1B5E20") else Color.parseColor("#4A148C")
+        val textColor = Color.argb(120, 255, 255, 255)
+
+        // ✅ Root Layout
+        val root = FrameLayout(this).apply {
+            setBackgroundColor(bgColor)
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        // ✅ اللوجو (دائرة بيضاء شفافة مع حرف)
+        val logoSize = dpToPx(80)
+        val logo = TextView(this).apply {
+            text = "F"
+            textSize = 32f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            background = createCircleDrawable()
+            alpha = 0f
+            layoutParams = FrameLayout.LayoutParams(logoSize, logoSize).apply {
+                gravity = Gravity.CENTER
             }
-            
-            // عند انتهاء التحميل، انتقل فوراً دون انتظار انتهاء الرسم
-            runOnUiThread {
-                startActivity(Intent(this@SplashActivity, MainActivity::class.java))
-                finish()
+        }
+
+        // ✅ نص "Made by Ali El-Shoraa"
+        val madeBy = TextView(this).apply {
+            text = "Made by Ali El-Shoraa"
+            textSize = 12f
+            setTextColor(textColor)
+            gravity = Gravity.CENTER
+            alpha = 0f
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                bottomMargin = dpToPx(32)
             }
+        }
+
+        root.addView(logo)
+        root.addView(madeBy)
+        setContentView(root)
+
+        // ✅ Fade in للوجو
+        val logoFade = ObjectAnimator.ofFloat(logo, View.ALPHA, 0f, 1f).apply {
+            duration = 900
+            startDelay = 300
+        }
+
+        // ✅ Fade in للنص بعد اللوجو
+        val textFade = ObjectAnimator.ofFloat(madeBy, View.ALPHA, 0f, 1f).apply {
+            duration = 700
+            startDelay = 1000
+        }
+
+        val set = AnimatorSet()
+        set.playTogether(logoFade, textFade)
+        set.start()
+
+        // ✅ انتقل للتطبيق بعد انتهاء الأنيميشن
+        Handler(Looper.getMainLooper()).postDelayed({
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+        }, 2200)
+    }
+
+    private fun dpToPx(dp: Int): Int {
+        return (dp * resources.displayMetrics.density).toInt()
+    }
+
+    private fun createCircleDrawable(): android.graphics.drawable.ShapeDrawable {
+        return android.graphics.drawable.ShapeDrawable(
+            android.graphics.drawable.shapes.OvalShape()
+        ).apply {
+            paint.color = Color.argb(40, 255, 255, 255)
         }
     }
 }`;
@@ -108,80 +162,11 @@ class SplashActivity : AppCompatActivity() {
   ]);
 };
 
-// ✅ 3. أنشئ Layout XML تلقائياً
-const withSplashLayout = (config) => {
-  return withDangerousMod(config, [
-    "android",
-    async (mod) => {
-      const layoutDir = path.join(
-        mod.modRequest.platformProjectRoot,
-        "app/src/main/res/layout",
-      );
-
-      fs.mkdirSync(layoutDir, { recursive: true });
-
-      const layoutContent = `<?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="#ffffff">
-
-    <com.airbnb.lottie.LottieAnimationView
-        android:id="@+id/lottieView"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        app:lottie_fileName="splash.json"
-        app:lottie_autoPlay="true"
-        app:lottie_loop="true"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"/>
-
-</androidx.constraintlayout.widget.ConstraintLayout>`;
-
-      fs.writeFileSync(
-        path.join(layoutDir, "activity_splash.xml"),
-        layoutContent,
-      );
-      return mod;
-    },
-  ]);
-};
-
-// ✅ 4. أنشئ assets وانسخ splash.json تلقائياً
-const withSplashAsset = (config) => {
-  return withDangerousMod(config, [
-    "android",
-    async (mod) => {
-      const assetsDir = path.join(
-        mod.modRequest.platformProjectRoot,
-        "app/src/main/assets",
-      );
-
-      fs.mkdirSync(assetsDir, { recursive: true });
-
-      const source = path.join(
-        mod.modRequest.projectRoot,
-        "assets/animation/splash.json", // ✅ مسار ملفك
-      );
-      const dest = path.join(assetsDir, "splash.json");
-
-      if (fs.existsSync(source)) {
-        fs.copyFileSync(source, dest);
-      }
-      return mod;
-    },
-  ]);
-};
-
-// ✅ 5. عدّل AndroidManifest
 const withSplashManifest = (config) => {
   return withAndroidManifest(config, (mod) => {
     const manifest = mod.modResults.manifest;
     const application = manifest.application[0];
 
-    // أزل LAUNCHER من MainActivity
     application.activity = application.activity.map((activity) => {
       if (activity.$["android:name"] === ".MainActivity") {
         activity["intent-filter"] = activity["intent-filter"]?.filter(
@@ -195,7 +180,6 @@ const withSplashManifest = (config) => {
       return activity;
     });
 
-    // أضف SplashActivity إذا لم تكن موجودة
     const hasSplash = application.activity.some(
       (a) => a.$["android:name"] === ".SplashActivity",
     );
@@ -206,16 +190,13 @@ const withSplashManifest = (config) => {
           "android:name": ".SplashActivity",
           "android:theme": "@style/Theme.AppCompat.NoActionBar",
           "android:exported": "true",
+          "android:screenOrientation": "portrait",
         },
         "intent-filter": [
           {
             action: [{ $: { "android:name": "android.intent.action.MAIN" } }],
             category: [
-              {
-                $: {
-                  "android:name": "android.intent.category.LAUNCHER",
-                },
-              },
+              { $: { "android:name": "android.intent.category.LAUNCHER" } },
             ],
           },
         ],
@@ -226,13 +207,9 @@ const withSplashManifest = (config) => {
   });
 };
 
-// ✅ دمج كل الـ plugins
 module.exports = (config) => {
-  config = withLottieGradle(config);
   config = withSplashDrawable(config);
   config = withSplashActivity(config);
-  config = withSplashLayout(config);
-  config = withSplashAsset(config);
   config = withSplashManifest(config);
   return config;
 };
