@@ -46,19 +46,20 @@ jobs:
 
       - name: Create gradle.properties
         run: |
-          cat >> android/gradle.properties << EOF
-          MYAPP_UPLOAD_STORE_FILE=release.keystore
-          MYAPP_UPLOAD_KEY_ALIAS=${{ secrets.KEY_ALIAS }}
-          MYAPP_UPLOAD_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}
-          MYAPP_UPLOAD_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
-          hermesEnabled=true
-          EOF
-          # ✅ لا تضع enableMinify هنا - الـ plugin يضيفها في prebuild
-
-      - name: Verify Optimizations Active
-        run: |
-          echo "=== gradle.properties ==="
-          grep -E "enableMinify|enableShrink|enablePng|enableBundle|enableR8" android/gradle.properties || echo "❌ NOT FOUND"
+          PROPS="android/gradle.properties"
+          echo "" >> $PROPS
+          echo "MYAPP_UPLOAD_STORE_FILE=release.keystore" >> $PROPS
+          echo "MYAPP_UPLOAD_KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $PROPS
+          echo "MYAPP_UPLOAD_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $PROPS
+          echo "MYAPP_UPLOAD_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $PROPS
+          echo "hermesEnabled=true" >> $PROPS
+          echo "android.enableMinifyInReleaseBuilds=true" >> $PROPS
+          echo "android.enableShrinkResourcesInReleaseBuilds=true" >> $PROPS
+          echo "android.enablePngCrunchInReleaseBuilds=true" >> $PROPS
+          echo "android.enableBundleCompression=true" >> $PROPS
+          echo "android.enableR8.fullMode=true" >> $PROPS
+          echo "=== Verify ==="
+          tail -15 $PROPS
 
       - name: Add ProGuard Rules
         run: |
