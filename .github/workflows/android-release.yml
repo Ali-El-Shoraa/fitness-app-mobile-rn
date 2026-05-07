@@ -39,6 +39,32 @@ jobs:
       - name: Prebuild Android
         run: npx expo prebuild --platform android --clean
 
+      - name: Apply Size Optimizations
+        run: |
+          BUILD_GRADLE="android/app/build.gradle"
+
+          sed -i 's/def enableSeparateBuildPerCPUArchitecture = false/def enableSeparateBuildPerCPUArchitecture = true/' $BUILD_GRADLE
+          sed -i 's/universalApk true/universalApk false/' $BUILD_GRADLE
+          sed -i 's/def enableProguardInReleaseBuilds = false/def enableProguardInReleaseBuilds = true/' $BUILD_GRADLE
+
+          echo "=== Verify ==="
+          grep -E "enableSeparateBuildPerCPUArchitecture|universalApk|enableProguardInReleaseBuilds" $BUILD_GRADLE
+
+      - name: Add ProGuard Rules
+        run: |
+          cat >> android/app/proguard-rules.pro << 'EOF'
+          -keep class com.facebook.react.** { *; }
+          -keep class com.facebook.hermes.** { *; }
+          -dontwarn com.facebook.**
+          -keep class expo.modules.** { *; }
+          -dontwarn expo.modules.**
+          -assumenosideeffects class android.util.Log {
+              public static int v(...);
+              public static int d(...);
+              public static int i(...);
+          }
+          EOF
+
       - name: Decode Release Keystore
         run: |
           mkdir -p android/app
@@ -55,6 +81,7 @@ jobs:
           android.enableR8.fullMode=true
           android.enableMinifyInReleaseBuilds=true
           android.enableShrinkResourcesInReleaseBuilds=true
+          android.enableResourceOptimizations=true
           EOF
 
       - name: Build Release APK
@@ -67,7 +94,6 @@ jobs:
 
       - name: List APK outputs
         run: |
-          echo "=== APK Files ==="
           find android/app/build/outputs/apk -name "*.apk" -exec ls -lh {} \;
 
       - name: Create GitHub Release
