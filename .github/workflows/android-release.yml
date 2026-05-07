@@ -39,16 +39,31 @@ jobs:
       - name: Prebuild Android
         run: npx expo prebuild --platform android --clean
 
-      - name: Apply Size Optimizations
+      - name: Decode Release Keystore
         run: |
-          BUILD_GRADLE="android/app/build.gradle"
+          mkdir -p android/app
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
 
-          sed -i 's/def enableSeparateBuildPerCPUArchitecture = false/def enableSeparateBuildPerCPUArchitecture = true/' $BUILD_GRADLE
-          sed -i 's/universalApk true/universalApk false/' $BUILD_GRADLE
-          sed -i 's/def enableProguardInReleaseBuilds = false/def enableProguardInReleaseBuilds = true/' $BUILD_GRADLE
+      - name: Create gradle.properties
+        run: |
+          cat >> android/gradle.properties << EOF
+          MYAPP_UPLOAD_STORE_FILE=release.keystore
+          MYAPP_UPLOAD_KEY_ALIAS=${{ secrets.KEY_ALIAS }}
+          MYAPP_UPLOAD_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}
+          MYAPP_UPLOAD_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
+          hermesEnabled=true
+          android.enableMinifyInReleaseBuilds=true
+          android.enableShrinkResourcesInReleaseBuilds=true
+          android.enablePngCrunchInReleaseBuilds=true
+          android.enableBundleCompression=true
+          android.enableR8.fullMode=true
+          EOF
 
-          echo "=== Verify ==="
-          grep -E "enableSeparateBuildPerCPUArchitecture|universalApk|enableProguardInReleaseBuilds" $BUILD_GRADLE
+      # ✅ تحقق أن القيم وصلت فعلاً
+      - name: Verify gradle.properties
+        run: |
+          echo "=== gradle.properties ==="
+          grep -E "enableMinify|enableShrink|enablePng|enableBundle|enableR8" android/gradle.properties
 
       - name: Add ProGuard Rules
         run: |
@@ -65,25 +80,6 @@ jobs:
           }
           EOF
 
-      - name: Decode Release Keystore
-        run: |
-          mkdir -p android/app
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
-
-      - name: Create gradle.properties
-        run: |
-          cat >> android/gradle.properties << EOF
-          MYAPP_UPLOAD_STORE_FILE=release.keystore
-          MYAPP_UPLOAD_KEY_ALIAS=${{ secrets.KEY_ALIAS }}
-          MYAPP_UPLOAD_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}
-          MYAPP_UPLOAD_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
-          hermesEnabled=true
-          android.enableR8.fullMode=true
-          android.enableMinifyInReleaseBuilds=true
-          android.enableShrinkResourcesInReleaseBuilds=true
-          android.enableResourceOptimizations=true
-          EOF
-
       - name: Build Release APK
         run: |
           cd android
@@ -94,6 +90,7 @@ jobs:
 
       - name: List APK outputs
         run: |
+          echo "=== APK Files ==="
           find android/app/build/outputs/apk -name "*.apk" -exec ls -lh {} \;
 
       - name: Create GitHub Release
