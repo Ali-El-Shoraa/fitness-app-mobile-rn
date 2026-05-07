@@ -1,9 +1,21 @@
+# .github/workflows/build.yml
 name: Build & Release Android APK
 
 on:
   push:
     tags:
       - "v*"
+  # ✅ أضف هذا للـ debug builds
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "Build Type"
+        required: true
+        default: "release"
+        type: choice
+        options:
+          - release
+          - debug
 
 permissions:
   contents: write
@@ -35,54 +47,52 @@ jobs:
         run: |
           echo "EXPO_PUBLIC_BASE_URL=${{ secrets.EXPO_PUBLIC_BASE_URL }}" >> .env
 
-      # ✅ prebuild يطبق withAndroidOptimization تلقائياً
       - name: Prebuild Android
         run: npx expo prebuild --platform android --clean
 
-        # أضف هذه الخطوة في yml بعد Prebuild مباشرة
-      - name: Debug build.gradle
-        run: |
-          echo "=== Full build.gradle ==="
-          cat android/app/build.gradle
-
-      # ✅ تحقق أن الإعدادات طُبقت فعلاً
-      - name: Verify Optimizations Applied
-        run: |
-          echo "=== Checking build.gradle ==="
-          grep -E "enableSeparateBuildPerCPUArchitecture|enableProguardInReleaseBuilds|universalApk" android/app/build.gradle || echo "❌ NOT FOUND"
-
-      - name: Decode Keystore
+      - name: Decode Release Keystore
         run: |
           mkdir -p android/app
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
 
+      # ✅ الحل: توليد debug.keystore تلقائياً بدلاً من تخزينه
+      - name: Generate Debug Keystore
+        run: |
+          keytool -genkeypair \
+            -v \
+            -keystore android/app/debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
       - name: Create gradle.properties
         run: |
-          cat >> android/gradle.properties << 'EOF'
+          cat >> android/gradle.properties << EOF
           MYAPP_UPLOAD_STORE_FILE=release.keystore
           MYAPP_UPLOAD_KEY_ALIAS=${{ secrets.KEY_ALIAS }}
           MYAPP_UPLOAD_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}
           MYAPP_UPLOAD_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
           hermesEnabled=true
-          # ✅ تقليل الحجم
+          android.enableR8.fullMode=true
           android.enableMinifyInReleaseBuilds=true
           android.enableShrinkResourcesInReleaseBuilds=true
-          # ✅ تقسيم APK حسب المعالج
-          reactNativeArchitectures=arm64-v8a,armeabi-v7a
+          android.enableResourceOptimizations=true
           EOF
 
-      - name: Build Release APK
+      - name: Build APK
         run: |
           cd android
           chmod +x gradlew
-          # ✅ arm64 فقط (أصغر حجم، يعمل على 99% من الهواتف الحديثة)
           ./gradlew assembleRelease \
             -PreactNativeArchitectures=arm64-v8a \
             --no-daemon
 
       - name: List APK outputs
         run: |
-          echo "=== APK Files ==="
           find android/app/build/outputs/apk -name "*.apk" -exec ls -lh {} \;
 
       - name: Create GitHub Release
@@ -90,126 +100,5 @@ jobs:
         with:
           files: android/app/build/outputs/apk/release/*.apk
           generate_release_notes: true
-          body: |
-            ### تم البناء بنجاح! 🚀
-            * **app-arm64-v8a-release.apk** — للهواتف الحديثة (أصغر حجماً).
-            * **app-armeabi-v7a-release.apk** — للهواتف القديمة.
-            * **app-universal-release.apk** — لجميع الهواتف.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-# name: Build & Release Android APK
-# on:
-#   push:
-#     tags:
-#       - "v*" # سيقوم بالبناء فقط عندما ترفع Tag مثل v1.1.0
-# # on:
-# #   push:
-# #     branches: ["main"]
-# #     tags:
-# #       - "v*"
-# permissions:
-#   contents: write # 🔥 الحل هنا
-
-# jobs:
-#   build:
-#     runs-on: ubuntu-latest
-
-#     steps:
-#       - name: Checkout repo
-#         uses: actions/checkout@v4
-
-#       - name: Setup Node
-#         uses: actions/setup-node@v4
-#         with:
-#           node-version: 20
-#           cache: npm
-
-#       - name: Setup Java
-#         uses: actions/setup-java@v4
-#         with:
-#           distribution: temurin
-#           java-version: 17
-
-#       - name: Install dependencies
-#         run: npm ci
-
-#       - name: Cache Gradle
-#         uses: actions/cache@v4
-#         with:
-#           path: |
-#             ~/.gradle/caches
-#             ~/.gradle/wrapper
-#           key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
-#           restore-keys: |
-#             gradle-${{ runner.os }}-
-
-#       - name: Create .env file
-#         run: |
-#           echo "EXPO_PUBLIC_BASE_URL=${{ secrets.EXPO_PUBLIC_BASE_URL }}" >> .env
-
-#       # - name: Prebuild Android
-#       #   run: npx expo prebuild --platform android
-#       - name: Prebuild Android
-#         run: npx expo prebuild --platform android
-
-#       # ✅ هذه هي الخطوة السحرية: تعديل الملف بالقوة بعد إنشائه
-#       - name: Force Android Optimizations
-#         run: |
-#           BUILD_GRADLE="android/app/build.gradle"
-#           # 1. تفعيل تقسيم الـ APK
-#           sed -i 's/def enableSeparateBuildPerCPUArchitecture = false/def enableSeparateBuildPerCPUArchitecture = true/g' $BUILD_GRADLE
-#           # 2. تفعيل Proguard
-#           sed -i 's/def enableProguardInReleaseBuilds = false/def enableProguardInReleaseBuilds = true/g' $BUILD_GRADLE
-#           # 3. تفعيل Universal APK
-#           sed -i '/reset()/a \            universalApk true' $BUILD_GRADLE
-
-#           # للتأكد من أن التعديل تم (سيظهر في سجلات الـ Action)
-#           echo "Checking modifications:"
-#           grep "enableSeparateBuildPerCPUArchitecture" $BUILD_GRADLE
-#           grep "enableProguardInReleaseBuilds" $BUILD_GRADLE
-#           grep "universalApk" $BUILD_GRADLE
-
-#       - name: Decode Keystore
-#         run: |
-#           mkdir -p android/app
-#           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
-
-#       - name: Create gradle.properties
-#         run: |
-#           cat >> android/gradle.properties << 'EOF'
-#           MYAPP_UPLOAD_STORE_FILE=release.keystore
-#           MYAPP_UPLOAD_KEY_ALIAS=${{ secrets.KEY_ALIAS }}
-#           MYAPP_UPLOAD_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}
-#           MYAPP_UPLOAD_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
-#           hermesEnabled=true
-#           EOF
-
-#       - name: Make Gradle executable
-#         run: chmod +x android/gradlew
-
-#       - name: Build Release APK
-#         run: |
-#           cd android
-#           ./gradlew clean
-#           ./gradlew assembleRelease --build-cache --parallel --no-daemon
-
-#       # - name: Upload APK Artifact
-#       #   uses: actions/upload-artifact@v4
-#       #   with:
-#       #     name: fitness-app
-#       #     path: android/app/build/outputs/apk/release/*.apk
-
-#       - name: Create GitHub Release
-#         if: startsWith(github.ref, 'refs/tags/')
-#         uses: softprops/action-gh-release@v2
-#         with:
-#           files: android/app/build/outputs/apk/release/*.apk
-#           generate_release_notes: true
-#           body: |
-#             ### Which file should I choose?
-#             * **app-universal-release.apk**: Works on all phones (the safest option).
-#             * **app-arm64-v8a-release.apk**: For modern phones (smaller size and faster performance).
-#             * **app-armeabi-v7a-release.apk**: For older phones.
-#         env:
-#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
