@@ -1,21 +1,10 @@
-# .github/workflows/build.yml
 name: Build & Release Android APK
 
 on:
   push:
     tags:
       - "v*"
-  # ✅ أضف هذا للـ debug builds
-  workflow_dispatch:
-    inputs:
-      build_type:
-        description: "Build Type"
-        required: true
-        default: "release"
-        type: choice
-        options:
-          - release
-          - debug
+      - "beta-*"
 
 permissions:
   contents: write
@@ -55,20 +44,6 @@ jobs:
           mkdir -p android/app
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
 
-      # ✅ الحل: توليد debug.keystore تلقائياً بدلاً من تخزينه
-      - name: Generate Debug Keystore
-        run: |
-          keytool -genkeypair \
-            -v \
-            -keystore android/app/debug.keystore \
-            -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
-
       - name: Create gradle.properties
         run: |
           cat >> android/gradle.properties << EOF
@@ -80,10 +55,9 @@ jobs:
           android.enableR8.fullMode=true
           android.enableMinifyInReleaseBuilds=true
           android.enableShrinkResourcesInReleaseBuilds=true
-          android.enableResourceOptimizations=true
           EOF
 
-      - name: Build APK
+      - name: Build Release APK
         run: |
           cd android
           chmod +x gradlew
@@ -93,6 +67,7 @@ jobs:
 
       - name: List APK outputs
         run: |
+          echo "=== APK Files ==="
           find android/app/build/outputs/apk -name "*.apk" -exec ls -lh {} \;
 
       - name: Create GitHub Release
@@ -100,5 +75,9 @@ jobs:
         with:
           files: android/app/build/outputs/apk/release/*.apk
           generate_release_notes: true
+          prerelease: ${{ startsWith(github.ref_name, 'beta-') }}
+          body: |
+            ${{ startsWith(github.ref_name, 'beta-') && '### نسخة تجريبية Beta 🧪' || '### إصدار رسمي 🚀' }}
+            * **app-arm64-v8a-release.apk** — للهواتف الحديثة
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
