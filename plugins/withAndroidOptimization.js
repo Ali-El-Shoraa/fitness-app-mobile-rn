@@ -1,8 +1,8 @@
 // plugins/withAndroidOptimization.js
 const {
-  withAppBuildGradle,
   withGradleProperties,
   withDangerousMod,
+  withAppBuildGradle,
 } = require("@expo/config-plugins");
 const fs = require("fs");
 const path = require("path");
@@ -10,7 +10,6 @@ const path = require("path");
 const loadLocalEnv = (projectRoot) => {
   const envPath = path.join(projectRoot, ".env.local");
   if (!fs.existsSync(envPath)) return {};
-
   const lines = fs.readFileSync(envPath, "utf8").split("\n");
   const env = {};
   lines.forEach((line) => {
@@ -26,44 +25,35 @@ const loadLocalEnv = (projectRoot) => {
 };
 
 const withAndroidOptimization = (config) => {
-  // ✅ نسخ release.keystore
-  // في withDangerousMod - استبدل جزء نسخ الـ keystore
+  // 1. نسخ release.keystore
   config = withDangerousMod(config, [
     "android",
     async (config) => {
-      const keystoreSource = path.join(
-        config.modRequest.projectRoot,
-        "release.keystore",
-      );
-      const keystoreDest = path.join(
+      const src = path.join(config.modRequest.projectRoot, "release.keystore");
+      const dest = path.join(
         config.modRequest.platformProjectRoot,
         "app",
         "release.keystore",
       );
-
-      if (fs.existsSync(keystoreSource)) {
-        // ✅ إذا الملف موجود مسبقاً احذفه أولاً قبل النسخ
-        if (fs.existsSync(keystoreDest)) {
+      if (fs.existsSync(src)) {
+        if (fs.existsSync(dest)) {
           try {
-            fs.unlinkSync(keystoreDest);
-          } catch (e) {
-            console.warn("⚠️ Could not delete existing keystore:", e.message);
-          }
+            fs.unlinkSync(dest);
+          } catch (e) {}
         }
-        fs.copyFileSync(keystoreSource, keystoreDest);
+        fs.copyFileSync(src, dest);
         console.log("✅ release.keystore copied");
-      } else {
-        console.log("ℹ️ release.keystore not found - OK for CI");
       }
       return config;
     },
   ]);
 
-  // ✅ gradle.properties - القيم من .env.local محلياً
+  // 2. gradle.properties - كل الإعدادات هنا
   config = withGradleProperties(config, (mod) => {
     const localEnv = loadLocalEnv(mod.modRequest.projectRoot);
 
     const properties = [
+      // Signing
       {
         type: "property",
         key: "MYAPP_UPLOAD_STORE_FILE",
@@ -84,22 +74,48 @@ const withAndroidOptimization = (config) => {
         key: "MYAPP_UPLOAD_KEY_PASSWORD",
         value: localEnv.MYAPP_UPLOAD_KEY_PASSWORD || "placeholder",
       },
+
+      // ✅ تحسينات الحجم - تُقرأ مباشرة من build.gradle
+      {
+        type: "property",
+        key: "android.enableMinifyInReleaseBuilds",
+        value: "true",
+      },
+      {
+        type: "property",
+        key: "android.enableShrinkResourcesInReleaseBuilds",
+        value: "true",
+      },
+      {
+        type: "property",
+        key: "android.enablePngCrunchInReleaseBuilds",
+        value: "true",
+      },
+      {
+        type: "property",
+        key: "android.enableBundleCompression",
+        value: "true",
+      },
+      { type: "property", key: "android.enableR8.fullMode", value: "true" },
     ];
 
     properties.forEach((prop) => {
-      if (!mod.modResults.find((p) => p.key === prop.key)) {
+      const existingIndex = mod.modResults.findIndex((p) => p.key === prop.key);
+      if (existingIndex === -1) {
         mod.modResults.push(prop);
+      } else {
+        // ✅ حدّث القيمة إذا موجودة بـ false
+        mod.modResults[existingIndex].value = prop.value;
       }
     });
     return mod;
   });
 
-  // ✅ build.gradle - الإصلاح الحقيقي
+  // 3. build.gradle - فقط signing config، لا تلمس minify/shrink
   config = withAppBuildGradle(config, (mod) => {
     let contents = mod.modResults.contents;
 
     if (!contents.includes("MYAPP_UPLOAD_STORE_FILE")) {
-      // الخطوة 1: أضف release signing config فقط (لا تلمس debug)
       contents = contents.replace(
         /signingConfigs\s*\{([\s\S]*?debug\s*\{[\s\S]*?\})\s*\}/,
         `signingConfigs {$1
@@ -112,22 +128,9 @@ const withAndroidOptimization = (config) => {
         }`,
       );
 
-      // الخطوة 2: ✅ فقط في buildTypes.release - غيّر الـ signingConfig
-      // هذا الـ regex يستهدف buildTypes.release فقط وليس debug
       contents = contents.replace(
         /(buildTypes\s*\{[\s\S]*?release\s*\{[\s\S]*?signingConfig\s+)signingConfigs\.debug/,
         "$1signingConfigs.release",
-      );
-    }
-
-    // ✅ تحسينات الحجم في release فقط
-    if (!contents.includes("crunchPngs")) {
-      contents = contents.replace(
-        /(buildTypes\s*\{[\s\S]*?release\s*\{)/,
-        `$1
-            minifyEnabled true
-            shrinkResources true
-            crunchPngs true`,
       );
     }
 

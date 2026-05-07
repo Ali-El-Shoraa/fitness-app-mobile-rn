@@ -52,18 +52,13 @@ jobs:
           MYAPP_UPLOAD_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}
           MYAPP_UPLOAD_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
           hermesEnabled=true
-          android.enableMinifyInReleaseBuilds=true
-          android.enableShrinkResourcesInReleaseBuilds=true
-          android.enablePngCrunchInReleaseBuilds=true
-          android.enableBundleCompression=true
-          android.enableR8.fullMode=true
           EOF
+          # ✅ لا تضع enableMinify هنا - الـ plugin يضيفها في prebuild
 
-      # ✅ تحقق أن القيم وصلت فعلاً
-      - name: Verify gradle.properties
+      - name: Verify Optimizations Active
         run: |
           echo "=== gradle.properties ==="
-          grep -E "enableMinify|enableShrink|enablePng|enableBundle|enableR8" android/gradle.properties
+          grep -E "enableMinify|enableShrink|enablePng|enableBundle|enableR8" android/gradle.properties || echo "❌ NOT FOUND"
 
       - name: Add ProGuard Rules
         run: |
