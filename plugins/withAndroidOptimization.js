@@ -115,22 +115,51 @@ const withAndroidOptimization = (config) => {
   config = withAppBuildGradle(config, (mod) => {
     let contents = mod.modResults.contents;
 
+    // ✅ Signing Config
     if (!contents.includes("MYAPP_UPLOAD_STORE_FILE")) {
       contents = contents.replace(
         /signingConfigs\s*\{([\s\S]*?debug\s*\{[\s\S]*?\})\s*\}/,
         `signingConfigs {$1
-            release {
-                storeFile file(MYAPP_UPLOAD_STORE_FILE)
-                storePassword MYAPP_UPLOAD_STORE_PASSWORD
-                keyAlias MYAPP_UPLOAD_KEY_ALIAS
-                keyPassword MYAPP_UPLOAD_KEY_PASSWORD
-            }
-        }`,
+          release {
+              storeFile file(MYAPP_UPLOAD_STORE_FILE)
+              storePassword MYAPP_UPLOAD_STORE_PASSWORD
+              keyAlias MYAPP_UPLOAD_KEY_ALIAS
+              keyPassword MYAPP_UPLOAD_KEY_PASSWORD
+          }
+      }`,
       );
 
       contents = contents.replace(
         /(buildTypes\s*\{[\s\S]*?release\s*\{[\s\S]*?signingConfig\s+)signingConfigs\.debug/,
         "$1signingConfigs.release",
+      );
+    }
+
+    // ✅ APK Splits للأجهزة القديمة والحديثة
+    if (!contents.includes("splits {")) {
+      contents = contents.replace(
+        /android\s*\{/,
+        `android {
+
+    splits {
+        abi {
+            reset()
+            enable true
+            universalApk false
+            include "armeabi-v7a", "arm64-v8a"
+        }
+    }`,
+      );
+    }
+
+    // ✅ تحسين الحجم
+    if (!contents.includes("minifyEnabled true")) {
+      contents = contents.replace(
+        /(buildTypes\s*\{[\s\S]*?release\s*\{)/,
+        `$1
+          minifyEnabled true
+          shrinkResources true
+          crunchPngs true`,
       );
     }
 
