@@ -66,8 +66,11 @@ class SplashActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         // ✅ اكتشف الوضع الحالي
-        val isDarkMode = (resources.configuration.uiMode and
-            Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val nightModeFlags =
+    applicationContext.resources.configuration.uiMode and
+    Configuration.UI_MODE_NIGHT_MASK
+
+val isDarkMode = nightModeFlags == Configuration.UI_MODE_NIGHT_YES
 
         // ✅ ألوان الخلفية
         val bgColor = if (isDarkMode) Color.parseColor("#1B5E20") else Color.parseColor("#4A148C")
@@ -133,7 +136,7 @@ class SplashActivity : AppCompatActivity() {
         set.start()
 
         // ✅ انتقل للتطبيق بعد انتهاء الأنيميشن
-        Handler(Looper.getMainLooper()).postDelayed({
+        window.decorView.postDelayed({
             startActivity(Intent(this, MainActivity::class.java))
             finish()
             overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
@@ -169,6 +172,8 @@ const withSplashManifest = (config) => {
 
     application.activity = application.activity.map((activity) => {
       if (activity.$["android:name"] === ".MainActivity") {
+        activity.$["android:launchMode"] = "singleTask";
+
         activity["intent-filter"] = activity["intent-filter"]?.filter(
           (filter) =>
             !filter.category?.some(
@@ -191,6 +196,8 @@ const withSplashManifest = (config) => {
           "android:theme": "@style/Theme.AppCompat.NoActionBar",
           "android:exported": "true",
           "android:screenOrientation": "portrait",
+          "android:noHistory": "true",
+          "android:launchMode": "singleTask",
         },
         "intent-filter": [
           {
